@@ -1,20 +1,50 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import HomeScreen from './screen/HomeScreen';
+import PaymentScreen from './screen/PaymentScreen';
+import TipScreen from './screen/TipScreen';
 
-export default function App() {
+import {Text} from 'react-native'
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+
+
+
+// Function Here
+function App(){
+
+  const Stack = createStackNavigator();
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
-}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+      <NavigationContainer>
+    
+        <Stack.Navigator initialRouteName="Home"> 
+
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{ headerShown: true }}
+          />
+
+          <Stack.Screen
+            name="Tip"
+            component={TipScreen}
+            options={{
+              headerTitle: "Tip Screen",
+              headerTitleAlign: "center",
+            }}/>
+
+          <Stack.Screen
+            name="Payment"
+            component={PaymentScreen}
+            options={{
+              headerTitle: "Payment Screen",
+              headerTitleAlign: "center",
+            }}/>
+
+        </Stack.Navigator>
+      </NavigationContainer>
+
+  );
+};
+
+export default App;
