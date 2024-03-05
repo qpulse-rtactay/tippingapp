@@ -1,108 +1,97 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Button, Alert, TouchableOpacity,SafeAreaView } from "react-native";
-import { CardField, useConfirmPayment,StripeProvider } from "@stripe/stripe-react-native";
-import {keys} from '../keys';
+import { useStripe, StripeProvider } from "@stripe/stripe-react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, TextInput, TouchableOpacity, Alert, SafeAreaView, StyleSheet } from "react-native";
+import { keys } from "../keys";
 
-//ADD localhost address of your server
-const API_URL = "http://10.0.2.2:3000";
+const PaymentScreen = ({ route }) => {
 
+  // Use useEffect for debugging, remove it later if not needed
+  useEffect(() => {
+    console.log("Route params:", route.params);
+  }, [route.params]);
 
-// route object is pass as prop to 'PaymentScreen' component
-// Pass the value of total amount of fees
-const PaymentScreen = ({route}) => {
-  const { totalAmount, totalFees, originalAmount } = route.params;
-  const [email, setEmail] = useState();
-  const [cardDetails, setCardDetails] = useState();
-  const { confirmPayment, loading } = useConfirmPayment();
+  const { totalAmount, totalFees, originalAmount } = route.params || {};
+  
+  // Add a check for existence
+  if (!totalAmount || !totalFees || !originalAmount) {
+    Alert.alert("Missing payment details");
+    return null; // or return some error component
+  }
 
-  const fetchPaymentIntentClientSecret = async (amount,fees, origamount) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+
+  const stripe = useStripe();
+
+  const subscribe = async () => {
     try {
-      const response = await fetch(`${API_URL}/create-payment-intent`, {
+      // sending request
+      const response = await fetch("http://10.0.2.2:3000/create-payment-intent", {
         method: "POST",
+        body: JSON.stringify({ name, email, amount: totalAmount, fees: totalFees, origamount: originalAmount }),
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amount,fees,origamount }), // Send the amount to the server
       });
-      const { clientSecret, error } = await response.json();
-      return { clientSecret, error };
-    } catch (error) {
-      console.error("Error fetching payment intent:", error);
-      return { error: error.message };
-    }
-  };
+      const data = await response.json();
+      console.log("Server response:", response, data); // Log the server response for debugging
 
-  const handlePayPress = async () => {
-    //1.Gather the customer's billing information (e.g., email)
-    if (!cardDetails?.complete || !email) {
-      Alert.alert("Please enter Complete card details and Email");
-      return;
+      if (!response.ok) return Alert.alert(data.message);
+
+      const clientSecret = data.clientSecret;
+
+      const initSheet = await stripe.initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'Quantum Pulse',
+        type: 'Card',
+      });
+
+      if (initSheet.error) return Alert.alert(initSheet.error.message);
+      const presentSheet = await stripe.presentPaymentSheet({
+        clientSecret,
+      });
+
+      if (presentSheet.error) return Alert.alert(presentSheet.error.message);
+      Alert.alert("Payment complete, thank you!");
+      
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Something went wrong, try again later!");
     }
-    const billingDetails = {
-      email: email,
-    };
-    //2.Fetch the intent client secret from the backend
-    try {
-      const { clientSecret, error } = await fetchPaymentIntentClientSecret(totalAmount,totalFees, originalAmount);
-      //2. confirm the payment
-      if (error) {
-        console.log("Unable to process payment");
-      } else {
-        const { paymentIntent, error } = await confirmPayment(clientSecret, {
-          paymentMethodType: "Card",
-          billingDetails: billingDetails,
-        });
-        if (error) {
-          alert(`Payment Confirmation Error ${error.message}`);
-        } else if (paymentIntent) {
-          alert("Payment Successful");
-          console.log("Payment successful ", paymentIntent);
-        }
-      }
-    } catch (e) {
-      console.log(e);
-    }
-    //3.Confirm the payment with the card details
   };
 
   return (
     <StripeProvider publishableKey={keys.public}>
       <SafeAreaView style={styles.wrapper}>
         <View style={styles.container}>
-          <Text>{`Total Amount: $${totalAmount}`}</Text>
+          <Text style={styles.amountButtonText}>{`Total Amount: $${totalAmount}`}</Text>
 
           <TextInput
-            autoCapitalize="none"
-            placeholder="E-mail"
-            keyboardType="email-address"
-            onChange={value => setEmail(value.nativeEvent.text)}
+            value={name}
+            onChangeText={(text) => setName(text)}
+            placeholder="Full Name"
             style={styles.input}
           />
-          <CardField
-            postalCodeEnabled={true}
-            placeholder={{
-              number: "4242 4242 4242 4242",
-            }}
-            cardStyle={styles.card}
-            style={styles.cardContainer}
-            onCardChange={cardDetails => {
-              setCardDetails(cardDetails);
-            }}
+
+          <TextInput
+            value={email}
+            onChangeText={(text) => setEmail(text)}
+            placeholder="Email Here.."
+            style={styles.input}
           />
-          
 
-          <TouchableOpacity style={styles.payButton} onPress={handlePayPress} disabled={loading}>
-              <Text style={styles.payButtonText}>Pay</Text>
+          <TouchableOpacity
+            style={styles.payButton}
+            onPress={subscribe}
+          >
+            <Text style={styles.payButtonText}>Pay</Text>
           </TouchableOpacity>
-
-          {/* <Button onPress={handlePayPress} title="Pay" disabled={loading} /> */}
         </View>
       </SafeAreaView>
-
     </StripeProvider>
-
   );
 };
+
 export default PaymentScreen;
 
 const styles = StyleSheet.create({
@@ -112,32 +101,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    margin: 20
-    },
-
-  input: {
-    backgroundColor: "#efefefef",
-    borderRadius: 5,
-    fontSize: 20,
-    height: 50,
-    padding: 10,
+    margin: 20,
   },
-  card: {
-    backgroundColor: "#efefefef",
-  },
-  cardContainer: {
-    height: 20,
-    marginVertical: 30,
-  },
-  
   payButton: {
     backgroundColor: "#46A29F",
     padding: 15,
     borderRadius: 8,
+    marginTop:20,
   },
   payButtonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
   },
+  amountButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 30,
+  },
+  input: {
+    width: '100%', // Set the width as a percentage of the parent container
+    height: 50,    // Set the height as needed
+    fontSize: 18,  // Set the font size
+    padding: 5,    // Set the padding
+    borderWidth: 1, // Set the border width
+    borderColor: '#ccc', // Set the border color
+    borderRadius: 8, // Set the border radius for rounded corners
+    marginBottom: 10, // Add some margin at the bottom if needed
+  }
 });
